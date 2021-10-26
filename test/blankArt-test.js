@@ -9,7 +9,7 @@ describe("BlankArt", function () {
       const [minter, redeemer, _] = await ethers.getSigners()
 
       let factory = await ethers.getContractFactory("BlankArt")
-      const contract = await factory.deploy(minter.address, 10000)
+      const contract = await factory.deploy(minter.address, 10000, "ar://123456789/")
 
       // the redeemerContract is an instance of the contract that's wired up to the redeemer's signing key
       const redeemerFactory = factory.connect(redeemer)
@@ -76,6 +76,33 @@ describe("BlankArt", function () {
 
     await expect(contract.connect(addr2).redeemVoucher(1, voucher))
       .to.be.revertedWith("Voucher is for a different wallet address");
+  });
+
+  it("Should return the correct tokenURI for an unlocked NFT", async function() {
+    const { contract, redeemerContract, redeemer, minter } = await deploy()
+
+    const lazyMinter = new LazyMinter({ contract, signer: minter })
+    const voucher = await lazyMinter.createVoucher(redeemer.address)
+
+    await expect(redeemerContract.redeemVoucher(3, voucher))
+      .to.emit(contract, 'Transfer');
+
+    expect(await redeemerContract.tokenURI(1)).to.equal("ar://123456789/1");
+
+    expect(await redeemerContract.tokenURI(2)).to.equal("ar://123456789/2");
+
+    expect(await redeemerContract.tokenURI(3)).to.equal("ar://123456789/3");
+
+    await redeemerContract.lockTokenURI(3);
+
+    await contract.addBaseURI("ar://987654321/");
+
+    expect(await redeemerContract.tokenURI(1)).to.equal("ar://987654321/1");
+
+    expect(await redeemerContract.tokenURI(2)).to.equal("ar://987654321/2");
+
+    expect(await redeemerContract.tokenURI(3)).to.equal("ar://123456789/3");
+    
   });
 
   it("should allow you to check membership if an address has minted", async () => {
