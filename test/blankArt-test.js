@@ -5,11 +5,16 @@ const { LazyMinter } = require('../lib');
 describe("BlankArt", function () {
   let blankArt;
 
+  // Sample ArWeave URIs for testing only. Can replace with legitimate hashes once created.
+  let arWeaveURI = new Array();
+  arWeaveURI.push("ar://123456789/");
+  arWeaveURI.push("ar://987654321/");
+
   async function deploy() {
       const [minter, redeemer, _] = await ethers.getSigners()
 
       let factory = await ethers.getContractFactory("BlankArt")
-      const contract = await factory.deploy(minter.address, 10000)
+      const contract = await factory.deploy(minter.address, 10000, arWeaveURI[0])
 
       // the redeemerContract is an instance of the contract that's wired up to the redeemer's signing key
       const redeemerFactory = factory.connect(redeemer)
@@ -76,6 +81,36 @@ describe("BlankArt", function () {
 
     await expect(contract.connect(addr2).redeemVoucher(1, voucher))
       .to.be.revertedWith("Voucher is for a different wallet address");
+  });
+
+  it("Should return the correct tokenURI for an unlocked NFT", async function() {
+    const { contract, redeemerContract, redeemer, minter } = await deploy()
+
+    const lazyMinter = new LazyMinter({ contract, signer: minter })
+    const voucher = await lazyMinter.createVoucher(redeemer.address)
+
+    await expect(redeemerContract.redeemVoucher(3, voucher))
+      .to.emit(contract, 'Transfer');
+
+    expect(await redeemerContract.tokenURI(1)).to.equal(arWeaveURI[0] + "1");
+
+    expect(await redeemerContract.tokenURI(2)).to.equal(arWeaveURI[0] + "2");
+
+    expect(await redeemerContract.tokenURI(3)).to.equal(arWeaveURI[0] + "3");
+
+    await redeemerContract.lockTokenURI(3);
+
+    await contract.addBaseURI(arWeaveURI[1]);
+
+    // Expect to be on the v2 URI
+    expect(await redeemerContract.tokenURI(1)).to.equal(arWeaveURI[1] + "1");
+
+    // Expect to be on the v2 URI
+    expect(await redeemerContract.tokenURI(2)).to.equal(arWeaveURI[1] + "2");
+
+    // Expect to be locked back to the v1 URI
+    expect(await redeemerContract.tokenURI(3)).to.equal(arWeaveURI[0] + "3");
+    
   });
 
   it("should allow you to check membership if an address has minted", async () => {
